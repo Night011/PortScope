@@ -3,6 +3,12 @@
 
 #include "framework.h"
 #include "PortScope.h"
+#include "Resource.h"
+#include <iphlpapi.h>
+#include <vector>
+#include <string>
+
+#pragma comment(lib, "Iphlpapi.lib")
 
 #define MAX_LOADSTRING 100
 
@@ -10,6 +16,11 @@
 HINSTANCE hInst;                                // текущий экземпляр
 WCHAR szTitle[MAX_LOADSTRING];                  // Текст строки заголовка
 WCHAR szWindowClass[MAX_LOADSTRING];            // имя класса главного окна
+
+// Forward declarations for functions used in this module
+BOOL InitInstance(HINSTANCE, int);
+LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 
 // Отправить объявления функций, включенных в этот модуль кода:
 ATOM                MyRegisterClass(HINSTANCE hInstance); 
@@ -118,6 +129,49 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //  WM_DESTROY  - отправить сообщение о выходе и вернуться
 //
 //
+
+
+
+int GetTcpCount()
+{
+    DWORD size = 0;
+
+    DWORD result = GetExtendedTcpTable(
+        nullptr,
+        &size,
+        FALSE,
+        AF_INET,
+        TCP_TABLE_OWNER_PID_ALL,
+        0
+    );
+
+    if (result != ERROR_INSUFFICIENT_BUFFER)
+        return -1;
+
+    std::vector<BYTE> buffer(size);
+
+    result = GetExtendedTcpTable(
+        buffer.data(),
+        &size,
+        FALSE,
+        AF_INET,
+        TCP_TABLE_OWNER_PID_ALL,
+        0
+    );
+
+    if (result != NO_ERROR)
+        return -1;
+
+    auto* table =
+        reinterpret_cast<PMIB_TCPTABLE_OWNER_PID>(
+            buffer.data()
+            );
+
+    return static_cast<int>(table->dwNumEntries);
+}
+
+
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
@@ -134,11 +188,67 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDM_EXIT:
                 DestroyWindow(hWnd);
                 break;
+            case 5001:
+            {
+                int count = GetTcpCount();
+
+                if (count == -1)
+                {
+                    SetWindowTextW(
+                        GetDlgItem(hWnd, 5002),
+                        L"Status: Failed to read TCP data"
+                    );
+                }
+                else
+                {
+                    std::wstring text =
+                        L"TCP IPv4 entries: " +
+                        std::to_wstring(count);
+
+                    SetWindowTextW(
+                        GetDlgItem(hWnd, 5002),
+                        text.c_str()
+                    );
+                }
+
+                break;
+            }
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
             }
         }
         break;
+    case WM_CREATE:
+    {
+        SetWindowTextW(hWnd, L"PortScope | Local Monitor");
+
+        CreateWindowW(
+            L"BUTTON",
+            L"Refresh Ports",
+            WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+            5, 0,
+            95, 25,
+            hWnd,
+            (HMENU)5001,
+            nullptr,
+            nullptr
+        );
+
+        CreateWindowW(
+            L"STATIC",
+            L"Status: Ready",
+            WS_VISIBLE | WS_CHILD,
+            105, 0,
+            300, 25,
+            hWnd,
+            (HMENU)5002,
+            nullptr,
+            nullptr
+        );
+
+        return 0;
+    }
+
     case WM_PAINT:
         {
             PAINTSTRUCT ps;
