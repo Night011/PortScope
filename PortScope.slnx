@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="PortScope/PortScope.vcxproj" Id="1a43d667-6da5-4eec-8928-0f3960ff44c7" />
+</Solution>
